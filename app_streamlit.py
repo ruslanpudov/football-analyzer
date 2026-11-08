@@ -6,7 +6,7 @@ import base64
 import requests
 from io import StringIO
 from datetime import datetime
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Tactical Analyzer", page_icon="⚽", layout="centered")
 
@@ -32,7 +32,7 @@ league_map = {
 }
 
 # ==========================================
-# 1. ЗАГРУЗКА БОЛЬШИХ ДАННЫХ (кэшируется)
+# 1. ЗАГРУЗКА ДАННЫХ
 # ==========================================
 @st.cache_data
 def load_data():
@@ -109,7 +109,7 @@ def save_starting_bank(amount):
     return gh_write_file(CONFIG_FILE, json.dumps({"starting_bank": amount}))
 
 # ==========================================
-# 3. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# 3. ВСПОМОГАТЕЛЬНЫЕ
 # ==========================================
 def get_prob_color(prob):
     if prob >= 80: return "#00E676"
@@ -118,9 +118,7 @@ def get_prob_color(prob):
     elif prob >= 35: return "#EF9A9A"
     else: return "#E53935"
 
-# Стилизация таблицы истории
 def style_history(df_h):
-    # Считаем прибыль для каждой строки
     profits = []
     for _, r in df_h.iterrows():
         if r['Результат'] == 'Выигрыш': p = (r['Сумма'] * r['Кф']) - r['Сумма']
@@ -128,29 +126,22 @@ def style_history(df_h):
         else: p = 0
         profits.append(f"{p:+.1f} ₽")
     
-    # Копируем датафрейм для отображения
     display_df = df_h[['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Сумма', 'Результат']].copy()
     display_df['Прибыль'] = profits
 
-    # Функция для подсветки результата
     def highlight_result(s):
         return ['color: #00E676; font-weight: bold' if v == 'Выигрыш' else ('color: #E53935; font-weight: bold' if v == 'Проигрыш' else 'color: #FFF59D; font-weight: bold') for v in s]
         
-    # Функция для подсветки прибыли
     def highlight_profit(s):
         res = []
         for v in s:
             try:
                 num = float(str(v).replace(' ₽', '').replace('+', ''))
                 res.append('color: #00E676; font-weight: bold' if num > 0 else 'color: #E53935; font-weight: bold')
-            except:
-                res.append('')
+            except: res.append('')
         return res
 
-    # Применяем стили
     return display_df.style.apply(highlight_result, subset=['Результат']).apply(highlight_profit, subset=['Прибыль'])
-    
-    return display_df.style.applymap(color_result, subset=['Результат']).applymap(color_profit, subset=['Прибыль'])
 
 # ==========================================
 # 4. ИНТЕРФЕЙС
@@ -286,7 +277,7 @@ with tab1:
                         if roi > 0: st.success(f"Валуй: +{roi:.1f}%", icon="✅")
                         else: st.error(f"Валуй: {roi:.1f}%", icon="❌")
                         
-                        if st.button(f"➕ В ожидание: {m}", key=f"add_{m}", use_container_width=True):
+                        if st.button(f"➕ Добавить: {m}", key=f"add_{m}", use_container_width=True):
                             df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
                             new_row = {'Дата': datetime.now().strftime("%Y-%m-%d %H:%M"), 'Лига': league_name, 'Матч': match_name, 'Ставка': m, 'Кф': odds, 'Валуй': f"{roi:+.1f}%", 'Сумма': 100}
                             df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
@@ -320,13 +311,20 @@ with tab2:
             elif row['Результат'] == 'Проигрыш': profit -= row['Сумма']
         current_bank = starting_bank + profit
         roi = (profit / total_staked * 100) if total_staked > 0 else 0
-    else:
-        win_rate, total_staked, profit, current_bank, roi = 0, 0, 0, starting_bank, 0
         
-    col1, col2 = st.columns(2)
-    col1.metric("Текущий банк", f"{current_bank:,.0f} ₽")
-    col2.metric("ROI", f"{roi:+.1f}%")
-    st.write(f"Ставок: **{total_bets}** | Выигрышей: **{wins if total_bets > 0 else 0}** | Проигрышей: **{losses if total_bets > 0 else 0}**")
+        # Красивые метрики с дельтой
+        last_profit = 0
+        if len(df_bank) > 0:
+            last_row = df_bank.iloc[-1]
+            if last_row['Результат'] == 'Выигрыш': last_profit = (last_row['Сумма'] * last_row['Кф']) - last_row['Сумма']
+            elif last_row['Результат'] == 'Проигрыш': last_profit = -last_row['Сумма']
+        
+        col1, col2 = st.columns(2)
+        col1.metric("Текущий банк", f"{current_bank:,.0f} ₽", f"{last_profit:+.0f} ₽")
+        col2.metric("ROI", f"{roi:+.1f}%")
+        
+        st.write(f"Ставок: **{total_bets}** | Выигрышей: **{wins}** | Проигрышей: **{losses}**")
+        st.progress(min(win_rate / 100.0, 1.0), text=f"Винрейт: {win_rate:.1f}%")
     
     if total_bets > 0:
         balance, cur = [starting_bank], starting_bank
@@ -334,62 +332,63 @@ with tab2:
             if row['Результат'] == 'Выигрыш': cur += (row['Сумма'] * row['Кф']) - row['Сумма']
             elif row['Результат'] == 'Проигрыш': cur -= row['Сумма']
             balance.append(cur)
-        fig, ax = plt.subplots(figsize=(8, 3))
-        fig.patch.set_facecolor('#0e1117'); ax.set_facecolor('#0e1117')
-        ax.plot(range(len(balance)), balance, marker='o', color="#00E676")
-        ax.axhline(y=starting_bank, color="gray", linestyle="--")
-        ax.tick_params(colors='white'); ax.spines['bottom'].set_color('white'); ax.spines['left'].set_color('white')
-        ax.set_title("Динамика банка", color="white"); ax.set_ylabel("Баланс (₽)", color="white")
-        st.pyplot(fig)
+            
+        # Plotly график (интерактивный)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=list(range(len(balance))), y=balance, mode='lines+markers', 
+                                 name='Баланс', line=dict(color='#00E676', width=3), marker=dict(size=6)))
+        fig.add_hline(y=starting_bank, line_dash="dash", line_color="gray", annotation_text="Начальный банк")
+        fig.update_layout(title="Динамика банка", xaxis_title="Номер ставки", yaxis_title="Баланс (₽)",
+                          template="plotly_dark", height=300, margin=dict(l=10, r=10, t=40, b=10))
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-    # === ОЖИДАЮЩИЕ СТАВКИ (С КНОПКАМИ) ===
+    # === ОЖИДАЮЩИЕ СТАВКИ (С КАРТОЧКАМИ) ===
     if not df_pending.empty:
         st.subheader("⏳ Ожидают результата")
         for i, row in df_pending.iterrows():
-            with st.container():
-                st.markdown(f"**{row['Матч']}** | {row['Ставка']} | Кф: {row['Кф']} | Сумма: {row['Сумма']}₽")
-                st.caption(f"Лига: {row['Лига']} | Валуй: {row['Валуй']}")
+            with st.container(border=True):
+                st.markdown(f"### {row['Матч']}")
+                st.caption(f"{row['Лига']} | {row['Ставка']} | Кф: **{row['Кф']}** | Валуй: **{row['Валуй']}** | Сумма: **{row['Сумма']}₽**")
                 
                 c1, c2, c3, c4 = st.columns(4)
-                if c1.button("✅ Выигрыш", key=f"win_{i}", use_container_width=True):
+                if c1.button("✅", key=f"win_{i}", help="Выигрыш", use_container_width=True):
                     df_b = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
                     new_row = {'Дата': row['Дата'], 'Лига': row['Лига'], 'Матч': row['Матч'], 'Ставка': row['Ставка'], 'Кф': row['Кф'], 'Валуй': row['Валуй'], 'Сумма': row['Сумма'], 'Результат': 'Выигрыш'}
                     df_b = pd.concat([df_b, pd.DataFrame([new_row])], ignore_index=True)
                     df_p = df_pending.drop(i)
                     gh_write_csv(BANK_FILE, df_b); gh_write_csv(PENDING_FILE, df_p)
                     st.rerun()
-                if c2.button("❌ Проигрыш", key=f"loss_{i}", use_container_width=True):
+                if c2.button("❌", key=f"loss_{i}", help="Проигрыш", use_container_width=True):
                     df_b = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
                     new_row = {'Дата': row['Дата'], 'Лига': row['Лига'], 'Матч': row['Матч'], 'Ставка': row['Ставка'], 'Кф': row['Кф'], 'Валуй': row['Валуй'], 'Сумма': row['Сумма'], 'Результат': 'Проигрыш'}
                     df_b = pd.concat([df_b, pd.DataFrame([new_row])], ignore_index=True)
                     df_p = df_pending.drop(i)
                     gh_write_csv(BANK_FILE, df_b); gh_write_csv(PENDING_FILE, df_p)
                     st.rerun()
-                if c3.button("↩️ Возврат", key=f"ret_{i}", use_container_width=True):
+                if c3.button("↩️", key=f"ret_{i}", help="Возврат", use_container_width=True):
                     df_b = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
                     new_row = {'Дата': row['Дата'], 'Лига': row['Лига'], 'Матч': row['Матч'], 'Ставка': row['Ставка'], 'Кф': row['Кф'], 'Валуй': row['Валуй'], 'Сумма': row['Сумма'], 'Результат': 'Возврат'}
                     df_b = pd.concat([df_b, pd.DataFrame([new_row])], ignore_index=True)
                     df_p = df_pending.drop(i)
                     gh_write_csv(BANK_FILE, df_b); gh_write_csv(PENDING_FILE, df_p)
                     st.rerun()
-                if c4.button("🗑️ Удалить", key=f"del_{i}", use_container_width=True):
+                if c4.button("🗑️", key=f"del_{i}", help="Удалить", use_container_width=True):
                     df_p = df_pending.drop(i)
                     gh_write_csv(PENDING_FILE, df_p)
                     st.rerun()
-                st.markdown("---")
                     
-    # === ИСТОРИЯ СТАВОК (С ЦВЕТАМИ И УПРАВЛЕНИЕМ) ===
+    # === ИСТОРИЯ ===
     if not df_bank.empty:
         st.subheader("📜 История ставок")
         st.dataframe(style_history(df_bank), use_container_width=True, height=300)
         
-        with st.expander("⚙️ Управление историей (Удалить / Редактировать)"):
+        with st.expander("⚙️ Управление историей"):
             for i, row in df_bank.iterrows():
                 cols = st.columns([3, 1, 1])
                 cols[0].write(f"{row['Дата']} | {row['Матч']} | {row['Ставка']} ({row['Результат']})")
-                if cols[1].button("✏️ Изменить", key=f"edit_hist_{i}", use_container_width=True):
+                if cols[1].button("✏️", key=f"edit_hist_{i}", help="Редактировать", use_container_width=True):
                     st.session_state[f"editing_{i}"] = True
-                if cols[2].button("🗑️ Удалить", key=f"del_hist_{i}", use_container_width=True):
+                if cols[2].button("🗑️", key=f"del_hist_{i}", help="Удалить", use_container_width=True):
                     df_b = df_bank.drop(i)
                     gh_write_csv(BANK_FILE, df_b)
                     st.rerun()
