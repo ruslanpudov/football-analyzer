@@ -11,17 +11,15 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Tactical Analyzer", page_icon="⚽", layout="centered")
 
 # ==========================================
-# КАСТОМНЫЙ CSS (Clean UI + Красота)
+# КАСТОМНЫЙ CSS
 # ==========================================
 st.markdown("""
     <style>
-    /* Скрываем стандартный интерфейс Streamlit (меню, футер, кнопку Deploy) */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display: none;}
     
-    /* Плавное появление */
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
@@ -30,7 +28,6 @@ st.markdown("""
         animation: fadeIn 0.4s ease-out;
     }
     
-    /* Красивые карточки */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 12px !important;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
@@ -38,7 +35,6 @@ st.markdown("""
         background: linear-gradient(145deg, #1a1a1a, #121212) !important;
     }
     
-    /* Кнопка с эффектом нажатия */
     .stButton > button {
         transition: all 0.1s ease-in-out;
         border-radius: 8px !important;
@@ -47,7 +43,6 @@ st.markdown("""
         transform: scale(0.96);
     }
     
-    /* Главная кнопка */
     button[kind="primary"] {
         color: black !important;
         background-color: #00E676 !important;
@@ -59,7 +54,6 @@ st.markdown("""
         box-shadow: 0 6px 20px 0 rgba(0, 230, 118, 0.5) !important;
     }
     
-    /* Стилизация таблицы истории */
     [data-testid="stDataFrame"] {
         border-radius: 10px;
         overflow: hidden;
@@ -207,10 +201,14 @@ def style_history(df_h):
 st.title("⚽ Tactical Analyzer")
 
 if not GITHUB_TOKEN:
-    st.warning("⚠️ GITHUB_TOKEN не найден. Данные не будут сохраняться.")
+    st.warning("⚠️ GITHUB_TOKEN не найден.")
 
-tab1, tab2 = st.tabs(["Анализ матча", "Мой Банк"])
+# ТЕПЕРЬ 3 ВКЛАДКИ
+tab1, tab_profile, tab2 = st.tabs(["Анализ матча", "Профиль команды", "Мой Банк"])
 
+# ==========================================
+# ВКЛАДКА 1: АНАЛИЗ МАТЧА
+# ==========================================
 with tab1:
     with st.expander("Ввод данных за 1-й тайм", expanded=True):
         league_name = st.selectbox("Лига", list(league_map.keys()))
@@ -331,7 +329,6 @@ with tab1:
                     with st.container():
                         c1, c2, c3 = st.columns([2, 1, 1])
                         
-                        # Подсветка лучшего рынка
                         if probs[m] > 75 and probs[m] == max([probs[x] for x in markets]):
                             c1.markdown(f"**{m}** 🔥 <span style='color:#FFF59D; font-size:12px;'>ТОП</span>", unsafe_allow_html=True)
                         else:
@@ -355,6 +352,120 @@ with tab1:
                                     st.balloons()
                                     st.rerun()
 
+# ==========================================
+# ВКЛАДКА 2: ПРОФИЛЬ КОМАНДЫ (НОВОЕ!)
+# ==========================================
+with tab_profile:
+    st.header("Профиль команды")
+    
+    if df.empty:
+        st.warning("База данных не загружена.")
+    else:
+        # Собираем уникальные названия команд из домашних и гостевых
+        all_teams = sorted(list(set(df['HomeTeam'].unique()) | set(df['AwayTeam'].unique())))
+        selected_team = st.selectbox("Выбери команду", all_teams)
+        
+        if selected_team:
+            # Фильтруем матчи, где команда играла дома или на выезде
+            team_matches = df[(df['HomeTeam'] == selected_team) | (df['AwayTeam'] == selected_team)].copy()
+            
+            if team_matches.empty:
+                st.info("Нет данных по этой команде.")
+            else:
+                # Сортируем по дате (если есть) или просто берем последние 10
+                # Для простоты берем последние 10 записей
+                last_10 = team_matches.tail(10).copy()
+                
+                # Считаем агрегаты
+                total_goals_for = 0
+                total_goals_against = 0
+                total_xg_for = 0
+                total_xg_against = 0
+                total_shots_for = 0
+                total_shots_against = 0
+                total_st_for = 0
+                total_st_against = 0
+                wins = 0
+                draws = 0
+                losses = 0
+                
+                # Подготавливаем таблицу для вывода
+                display_data = []
+                
+                for _, row in last_10.iterrows():
+                    is_home = row['HomeTeam'] == selected_team
+                    opp = row['AwayTeam'] if is_home else row['HomeTeam']
+                    
+                    goals_for = row['FTHG'] if is_home else row['FTAG']
+                    goals_against = row['FTAG'] if is_home else row['FTHG']
+                    xg_for = row['HxG'] if is_home else row['AxG']
+                    xg_against = row['AxG'] if is_home else row['HxG']
+                    shots_for = row['HS'] if is_home else row['AS']
+                    shots_against = row['AS'] if is_home else row['HS']
+                    st_for = row['HST'] if is_home else row['AST']
+                    st_against = row['AST'] if is_home else row['HST']
+                    
+                    total_goals_for += goals_for
+                    total_goals_against += goals_against
+                    total_xg_for += xg_for
+                    total_xg_against += xg_against
+                    total_shots_for += shots_for
+                    total_shots_against += shots_against
+                    total_st_for += st_for
+                    total_st_against += st_against
+                    
+                    if goals_for > goals_against: wins += 1
+                    elif goals_for == goals_against: draws += 1
+                    else: losses += 1
+                    
+                    # Форматируем результат
+                    res_color = "#00E676" if goals_for > goals_against else ("#E53935" if goals_for < goals_against else "#FFF59D")
+                    res_text = "В" if goals_for > goals_against else ("П" if goals_for < goals_against else "Н")
+                    
+                    display_data.append({
+                        'Соперник': opp,
+                        'Счет': f"{goals_for} - {goals_against}",
+                        'Рез': res_text,
+                        'xG (За)': round(xg_for, 2),
+                        'xG (Пр)': round(xg_against, 2),
+                        'Удары (За)': shots_for,
+                        'Удары (Пр)': shots_against,
+                        'В створ (За)': st_for,
+                        'В створ (Пр)': st_against,
+                        'Цвет': res_color
+                    })
+                
+                # Создаем DataFrame для отображения
+                display_df = pd.DataFrame(display_data)
+                
+                # Выводим метрики
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Форма (В-Н-П)", f"{wins}-{draws}-{losses}", f"За последние {len(last_10)} матчей")
+                col2.metric("Ср. xG (За)", f"{total_xg_for / len(last_10):.2f}", f"Ср. Удары: {total_shots_for / len(last_10):.1f}")
+                col3.metric("Ср. xG (Пр)", f"{total_xg_against / len(last_10):.2f}", f"Ср. Удары: {total_shots_against / len(last_10):.1f}")
+                
+                st.write("---")
+                st.subheader("Последние матчи")
+                
+                # Функция для подсветки результата в таблице
+                def color_res(val):
+                    return f'color: {val}; font-weight: bold'
+                
+                styled_df = display_df[['Соперник', 'Счет', 'Рез', 'xG (За)', 'xG (Пр)', 'Удары (За)', 'Удары (Пр)', 'В створ (За)', 'В створ (Пр)']].copy()
+                # Применяем цвет к колонке "Рез" через стили
+                styled_df = styled_df.style.applymap(lambda x: f'color: white', subset=['Соперник', 'Счет', 'xG (За)', 'xG (Пр)', 'Удары (За)', 'Удары (Пр)', 'В створ (За)', 'В створ (Пр)'])
+                
+                # Ручная подсветка для колонки "Рез" (поскольку applymap не работает с двумя колонками напрямую в Streamlit иногда)
+                def highlight_res_col(s):
+                    return [f'color: {display_df.iloc[i]["Цвет"]}; font-weight: bold' for i in range(len(s))]
+                
+                styled_df = styled_df.apply(highlight_res_col, subset=['Рез'])
+                
+                st.dataframe(styled_df, use_container_width=True, height=400)
+
+# ==========================================
+# ВКЛАДКА 3: МОЙ БАНК
+# ==========================================
 with tab2:
     st.header("Мой Банк")
     
@@ -362,7 +473,6 @@ with tab2:
     df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
     starting_bank = get_starting_bank()
     
-    # === АНАЛИТИКА (Как на ПК) ===
     if len(df_bank) > 0:
         df_bank['Лига'] = df_bank['Лига'].fillna('Не указана')
         df_bank.loc[df_bank['Лига'] == 'Неизвестно', 'Лига'] = 'Не указана'
@@ -478,7 +588,6 @@ with tab2:
     if not df_bank.empty:
         st.subheader("📜 История ставок")
         
-        # Кнопка скачивания CSV
         csv_data = df_bank.to_csv(index=False).encode('utf-8')
         st.download_button(label="📥 Скачать историю (CSV)", data=csv_data, file_name="my_bets.csv", mime="text/csv")
         
