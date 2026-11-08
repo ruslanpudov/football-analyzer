@@ -10,17 +10,57 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Tactical Analyzer", page_icon="⚽", layout="centered")
 
-# --- КАСТОМНЫЙ CSS (для читаемости кнопки) ---
+# ==========================================
+# КАСТОМНЫЙ CSS ДЛЯ КРАСОТЫ
+# ==========================================
 st.markdown("""
     <style>
+    /* Плавное появление контента */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .main .block-container {
+        animation: fadeIn 0.4s ease-out;
+    }
+    
+    /* Красивые карточки (контейнеры) */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 12px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
+        border: 1px solid #333 !important;
+        background: linear-gradient(145deg, #1a1a1a, #121212) !important;
+    }
+    
+    /* Кнопка с эффектом нажатия */
+    .stButton > button {
+        transition: all 0.1s ease-in-out;
+        border-radius: 8px !important;
+    }
+    .stButton > button:active {
+        transform: scale(0.96);
+    }
+    
+    /* Красивая главная кнопка (зеленая с черным текстом) */
     button[kind="primary"] {
         color: black !important;
         background-color: #00E676 !important;
-        font-weight: bold !important;
-        font-size: 18px !important;
+        font-weight: 800 !important;
+        box-shadow: 0 4px 14px 0 rgba(0, 230, 118, 0.39) !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #00C853 !important;
+        box-shadow: 0 6px 20px 0 rgba(0, 230, 118, 0.5) !important;
+    }
+    
+    /* Стилизация таблицы истории */
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #333;
     }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- GITHUB SETTINGS ---
 try:
@@ -168,9 +208,8 @@ tab1, tab2 = st.tabs(["Анализ матча", "Мой Банк"])
 with tab1:
     with st.expander("Ввод данных за 1-й тайм", expanded=True):
         league_name = st.selectbox("Лига", list(league_map.keys()))
-        match_name = st.text_input("Название матча", "") # Убрали "Реал - Барса"
+        match_name = st.text_input("Название матча", "")
         
-        # Возвращаем колонки вместо вкладок
         col_home, col_away = st.columns(2)
         
         with col_home:
@@ -300,6 +339,7 @@ with tab1:
                             df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
                             if gh_write_csv(PENDING_FILE, df_pending):
                                 st.toast(f"Ставка '{m}' сохранена!", icon="🎉")
+                                st.balloons() # АНИМАЦИЯ ШАРИКОВ
                                 st.rerun()
 
 with tab2:
@@ -329,7 +369,6 @@ with tab2:
         current_bank = starting_bank + profit
         roi = (profit / total_staked * 100) if total_staked > 0 else 0
         
-        # Красивые метрики (общая прибыль и цветной ROI)
         col1, col2 = st.columns(2)
         col1.metric("Текущий банк", f"{current_bank:,.0f} ₽", f"{profit:+.0f} ₽")
         
@@ -347,7 +386,6 @@ with tab2:
             elif row['Результат'] == 'Проигрыш': cur -= row['Сумма']
             balance.append(cur)
             
-        # Plotly график (интерактивный)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=list(range(len(balance))), y=balance, mode='lines+markers', 
                                  name='Баланс', line=dict(color='#00E676', width=3), marker=dict(size=6)))
@@ -356,7 +394,6 @@ with tab2:
                           template="plotly_dark", height=300, margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-    # === ОЖИДАЮЩИЕ СТАВКИ (С КАРТОЧКАМИ) ===
     if not df_pending.empty:
         st.subheader("⏳ Ожидают результата")
         for i, row in df_pending.iterrows():
@@ -371,6 +408,8 @@ with tab2:
                     df_b = pd.concat([df_b, pd.DataFrame([new_row])], ignore_index=True)
                     df_p = df_pending.drop(i)
                     gh_write_csv(BANK_FILE, df_b); gh_write_csv(PENDING_FILE, df_p)
+                    st.toast("💰 Касса!", icon="🤑") # УВЕДОМЛЕНИЕ
+                    st.balloons() # ШАРИКИ
                     st.rerun()
                 if c2.button("❌", key=f"loss_{i}", help="Проигрыш", use_container_width=True):
                     df_b = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
@@ -378,6 +417,7 @@ with tab2:
                     df_b = pd.concat([df_b, pd.DataFrame([new_row])], ignore_index=True)
                     df_p = df_pending.drop(i)
                     gh_write_csv(BANK_FILE, df_b); gh_write_csv(PENDING_FILE, df_p)
+                    st.toast("😔 Мимо...", icon="💸")
                     st.rerun()
                 if c3.button("↩️", key=f"ret_{i}", help="Возврат", use_container_width=True):
                     df_b = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
@@ -391,7 +431,6 @@ with tab2:
                     gh_write_csv(PENDING_FILE, df_p)
                     st.rerun()
                     
-    # === ИСТОРИЯ ===
     if not df_bank.empty:
         st.subheader("📜 История ставок")
         st.dataframe(style_history(df_bank), use_container_width=True, height=300)
