@@ -10,6 +10,18 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Tactical Analyzer", page_icon="⚽", layout="centered")
 
+# --- КАСТОМНЫЙ CSS (для читаемости кнопки) ---
+st.markdown("""
+    <style>
+    button[kind="primary"] {
+        color: black !important;
+        background-color: #00E676 !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- GITHUB SETTINGS ---
 try:
     GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", None)
@@ -156,16 +168,21 @@ tab1, tab2 = st.tabs(["Анализ матча", "Мой Банк"])
 with tab1:
     with st.expander("Ввод данных за 1-й тайм", expanded=True):
         league_name = st.selectbox("Лига", list(league_map.keys()))
-        match_name = st.text_input("Название матча", "Реал - Барса")
+        match_name = st.text_input("Название матча", "") # Убрали "Реал - Барса"
         
-        tab_home, tab_away = st.tabs(["🏠 Хозяева", "✈️ Гости"])
-        with tab_home:
+        # Возвращаем колонки вместо вкладок
+        col_home, col_away = st.columns(2)
+        
+        with col_home:
+            st.markdown("### 🏠 Хозяева")
             ht_home = st.number_input("Голы", 0, 10, 0, key="ht_home")
             hst = st.number_input("Удары в створ", 0, 20, 0, key="hst")
             hts = st.number_input("Общие удары", 0, 40, 0, key="hts")
             hxg = st.number_input("xG", 0.0, 10.0, 0.0, 0.1, key="hxg")
             hc = st.number_input("Угловые", 0, 20, 0, key="hc")
-        with tab_away:
+            
+        with col_away:
+            st.markdown("### ✈️ Гости")
             ht_away = st.number_input("Голы ", 0, 10, 0, key="ht_away")
             ast = st.number_input("Удары в створ ", 0, 20, 0, key="ast")
             ats = st.number_input("Общие удары ", 0, 40, 0, key="ats")
@@ -312,14 +329,10 @@ with tab2:
         current_bank = starting_bank + profit
         roi = (profit / total_staked * 100) if total_staked > 0 else 0
         
-        # Красивые метрики с дельтой
-                # Красивые метрики (общая прибыль и цветной ROI)
+        # Красивые метрики (общая прибыль и цветной ROI)
         col1, col2 = st.columns(2)
-        
-        # Для банка используем встроенную метрику (дельта = общая прибыль)
         col1.metric("Текущий банк", f"{current_bank:,.0f} ₽", f"{profit:+.0f} ₽")
         
-        # Для ROI делаем кастомный HTML, чтобы покрасить сам процент
         roi_color = "#00E676" if roi >= 0 else "#E53935"
         col2.markdown(f"<p style='font-size: 14px; color: #AAAAAA; margin-bottom: -5px;'>ROI</p>", unsafe_allow_html=True)
         col2.markdown(f"<p style='font-size: 36px; font-weight: bold; margin-top: 0px; color: {roi_color};'>{roi:+.1f}%</p>", unsafe_allow_html=True)
