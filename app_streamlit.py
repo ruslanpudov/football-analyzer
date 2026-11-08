@@ -102,18 +102,26 @@ with tab1:
         league_name = st.selectbox("Лига", list(league_map.keys()))
         match_name = st.text_input("Название матча", "Реал - Барса")
         
+            with st.expander("Ввод данных за 1-й тайм", expanded=True):
+        league_name = st.selectbox("Лига", list(league_map.keys()))
+        match_name = st.text_input("Название матча", "Реал - Барса")
+        
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("**Счет**")
-            ht_home = st.number_input("Хозяева", 0, 10, 0, key="ht_home")
-            st.markdown("**Удары в створ**")
-            hst = st.number_input("Хозяева", 0, 20, 0, key="hst")
-            st.markdown("**Общие удары**")
-            hts = st.number_input("Хозяева", 0, 40, 0, key="hts")
-            st.markdown("**xG**")
-            hxg = st.number_input("Хозяева", 0.0, 10.0, 0.0, 0.1, key="hxg")
-            st.markdown("**Угловые**")
-            hc = st.number_input("Хозяева", 0, 20, 0, key="hc")
+            st.markdown("### Хозяева")
+            ht_home = st.number_input("Голы", 0, 10, 0, key="ht_home")
+            hst = st.number_input("Удары в створ", 0, 20, 0, key="hst")
+            hts = st.number_input("Общие удары", 0, 40, 0, key="hts")
+            hxg = st.number_input("xG", 0.0, 10.0, 0.0, 0.1, key="hxg")
+            hc = st.number_input("Угловые", 0, 20, 0, key="hc")
+            
+        with c2:
+            st.markdown("### Гости")
+            ht_away = st.number_input("Голы ", 0, 10, 0, key="ht_away")
+            ast = st.number_input("Удары в створ ", 0, 20, 0, key="ast")
+            ats = st.number_input("Общие удары ", 0, 40, 0, key="ats")
+            axg = st.number_input("xG ", 0.0, 10.0, 0.0, 0.1, key="axg")
+            ac = st.number_input("Угловые ", 0, 20, 0, key="ac")
             
         with c2:
             st.markdown("**Гости**")
