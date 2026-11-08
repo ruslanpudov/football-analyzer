@@ -57,7 +57,7 @@ def load_data():
 df = load_data()
 
 # ==========================================
-# 2. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Работа с файлами)
+# 2. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ==========================================
 def init_files():
     if not os.path.exists(BANK_FILE):
@@ -102,10 +102,6 @@ with tab1:
         league_name = st.selectbox("Лига", list(league_map.keys()))
         match_name = st.text_input("Название матча", "Реал - Барса")
         
-            with st.expander("Ввод данных за 1-й тайм", expanded=True):
-        league_name = st.selectbox("Лига", list(league_map.keys()))
-        match_name = st.text_input("Название матча", "Реал - Барса")
-        
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("### Хозяева")
@@ -122,14 +118,6 @@ with tab1:
             ats = st.number_input("Общие удары ", 0, 40, 0, key="ats")
             axg = st.number_input("xG ", 0.0, 10.0, 0.0, 0.1, key="axg")
             ac = st.number_input("Угловые ", 0, 20, 0, key="ac")
-            
-        with c2:
-            st.markdown("**Гости**")
-            ht_away = st.number_input("Гости", 0, 10, 0, key="ht_away")
-            ast = st.number_input("Гости", 0, 20, 0, key="ast")
-            ats = st.number_input("Гости", 0, 40, 0, key="ats")
-            axg = st.number_input("Гости", 0.0, 10.0, 0.0, 0.1, key="axg")
-            ac = st.number_input("Гости", 0, 20, 0, key="ac")
             
     if st.button("АНАЛИЗИРОВАТЬ", type="primary", use_container_width=True):
         if df.empty:
@@ -156,7 +144,6 @@ with tab1:
                 scenario_name = ""
                 filtered_df = pd.DataFrame()
                 
-                # Логика
                 total_corners_1h = hc + ac
                 if total_corners_1h >= 8 and hst <= 3 and ast <= 3: 
                     scenario_name = f"{ht_home}:{ht_away} + Много угловых ({hc}:{ac})"
@@ -238,7 +225,6 @@ with tab1:
                         c1.write(f"**{m}**")
                         c2.write(f"**{probs[m]:.1f}%**")
                         
-                        # Используем ключи для сохранения введенных кфов
                         odds_val = st.session_state.get(f"odds_{m}", 1.0)
                         odds = c3.number_input("Кф", min_value=1.0, value=odds_val, key=f"odds_{m}", label_visibility="collapsed")
                         
@@ -263,7 +249,6 @@ with tab2:
     df_pending = load_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
     starting_bank = get_starting_bank()
     
-    # Редактирование начального банка
     with st.expander("Настройки банка"):
         new_start = st.number_input("Начальный банк", value=starting_bank)
         if st.button("Сохранить банк"):
