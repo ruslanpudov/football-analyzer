@@ -141,7 +141,6 @@ def gh_read_csv(path, columns):
     if not content.strip(): return pd.DataFrame(columns=columns)
     try:
         dfc = pd.read_csv(StringIO(content))
-        # КОНВЕРТИРУЕМ СУММУ В ЦЕЛЫЕ ЧИСЛА (убираем лишние нули)
         dfc['Сумма'] = pd.to_numeric(dfc['Сумма'], errors='coerce').fillna(0).round(0).astype(int)
         dfc['Кф'] = pd.to_numeric(dfc['Кф'], errors='coerce').fillna(0)
         if 'Валуй' in dfc.columns: dfc['Валуй'] = dfc['Валуй'].astype(str).replace('nan', '-')
@@ -207,7 +206,6 @@ st.title("⚽ Tactical Analyzer")
 if not GITHUB_TOKEN:
     st.warning("⚠️ GITHUB_TOKEN не найден.")
 
-# 3 ВКЛАДКИ
 tab1, tab_profile, tab2 = st.tabs(["Анализ матча", "Профиль команды", "Мой Банк"])
 
 # ==========================================
@@ -329,25 +327,40 @@ with tab1:
                 else: markets = ["ТМ 3.5", "ТБ 3.5", "П1 (Хозяева)", "Х (Ничья)", "П2 (Гости)"]
                 
                 st.write("---")
+                
+                # === ЗАГОЛОВКИ ТАБЛИЦЫ ===
+                h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 1])
+                h1.markdown("**Рынок**")
+                h2.markdown("**Вероятность**")
+                h3.markdown("**Твой Кф**")
+                h4.markdown("**Валуй**")
+                
                 for m in markets:
                     with st.container():
-                        c1, c2, c3 = st.columns([2, 1, 1])
+                        c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 1])
                         
+                        # 1. Рынок
                         if probs[m] > 75 and probs[m] == max([probs[x] for x in markets]):
                             c1.markdown(f"**{m}** 🔥 <span style='color:#FFF59D; font-size:12px;'>ТОП</span>", unsafe_allow_html=True)
                         else:
                             c1.write(f"**{m}**")
                             
-                        c2.markdown(f"<span style='color:{get_prob_color(probs[m])}; font-size: 18px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
+                        # 2. Вероятность
+                        c2.markdown(f"<span style='color:{get_prob_color(probs[m])}; font-size: 16px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
                         
+                        # 3. Поле ввода кэфа
                         odds = c3.number_input("Кф", min_value=1.0, value=st.session_state.get(f"odds_{m}", 1.0), key=f"odds_{m}", label_visibility="collapsed")
                         
+                        # 4. Расчет валуя
                         if odds > 1.0:
                             roi = ((probs[m]/100) * odds - 1) * 100
-                            if roi > 0: st.success(f"Валуй: +{roi:.1f}%", icon="✅")
-                            else: st.error(f"Валуй: {roi:.1f}%", icon="❌")
-                            
-                            if st.button(f"➕ Добавить: {m}", key=f"add_{m}", use_container_width=True):
+                            if roi > 0:
+                                c4.markdown(f"<span style='color:#00E676; font-weight: bold;'>+{roi:.1f}%</span>", unsafe_allow_html=True)
+                            else:
+                                c4.markdown(f"<span style='color:#E53935; font-weight: bold;'>{roi:.1f}%</span>", unsafe_allow_html=True)
+                                
+                            # 5. Кнопка добавления
+                            if c5.button("➕", key=f"add_{m}", help="Добавить в ожидаемые", use_container_width=True):
                                 df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
                                 new_row = {'Дата': datetime.now().strftime("%Y-%m-%d %H:%M"), 'Лига': league_name, 'Матч': match_name, 'Ставка': m, 'Кф': odds, 'Валуй': f"{roi:+.1f}%", 'Сумма': 100}
                                 df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
