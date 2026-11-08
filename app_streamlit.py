@@ -353,7 +353,7 @@ with tab1:
                                     st.rerun()
 
 # ==========================================
-# ВКЛАДКА 2: ПРОФИЛЬ КОМАНДЫ (НОВОЕ!)
+# ВКЛАДКА 2: ПРОФИЛЬ КОМАНДЫ
 # ==========================================
 with tab_profile:
     st.header("Профиль команды")
@@ -361,35 +361,28 @@ with tab_profile:
     if df.empty:
         st.warning("База данных не загружена.")
     else:
-        # Собираем уникальные названия команд из домашних и гостевых
-        all_teams = sorted(list(set(df['HomeTeam'].unique()) | set(df['AwayTeam'].unique())))
+        # ФИКС ОШИБКИ: Убираем пустые значения (NaN) перед созданием списка
+        home_teams = df['HomeTeam'].dropna().astype(str).unique()
+        away_teams = df['AwayTeam'].dropna().astype(str).unique()
+        all_teams = sorted(list(set(home_teams) | set(away_teams)))
+        
         selected_team = st.selectbox("Выбери команду", all_teams)
         
         if selected_team:
-            # Фильтруем матчи, где команда играла дома или на выезде
             team_matches = df[(df['HomeTeam'] == selected_team) | (df['AwayTeam'] == selected_team)].copy()
             
             if team_matches.empty:
                 st.info("Нет данных по этой команде.")
             else:
-                # Сортируем по дате (если есть) или просто берем последние 10
-                # Для простоты берем последние 10 записей
+                # Берем последние 10 матчей (по порядку в базе, обычно она отсортирована по дате)
                 last_10 = team_matches.tail(10).copy()
                 
-                # Считаем агрегаты
-                total_goals_for = 0
-                total_goals_against = 0
-                total_xg_for = 0
-                total_xg_against = 0
-                total_shots_for = 0
-                total_shots_against = 0
-                total_st_for = 0
-                total_st_against = 0
-                wins = 0
-                draws = 0
-                losses = 0
+                total_goals_for, total_goals_against = 0, 0
+                total_xg_for, total_xg_against = 0, 0
+                total_shots_for, total_shots_against = 0, 0
+                total_st_for, total_st_against = 0, 0
+                wins, draws, losses = 0, 0, 0
                 
-                # Подготавливаем таблицу для вывода
                 display_data = []
                 
                 for _, row in last_10.iterrows():
@@ -405,6 +398,10 @@ with tab_profile:
                     st_for = row['HST'] if is_home else row['AST']
                     st_against = row['AST'] if is_home else row['HST']
                     
+                    # Защита от NaN в числовых полях
+                    if pd.isna(xg_for): xg_for = 0
+                    if pd.isna(xg_against): xg_against = 0
+                    
                     total_goals_for += goals_for
                     total_goals_against += goals_against
                     total_xg_for += xg_for
@@ -418,7 +415,6 @@ with tab_profile:
                     elif goals_for == goals_against: draws += 1
                     else: losses += 1
                     
-                    # Форматируем результат
                     res_color = "#00E676" if goals_for > goals_against else ("#E53935" if goals_for < goals_against else "#FFF59D")
                     res_text = "В" if goals_for > goals_against else ("П" if goals_for < goals_against else "Н")
                     
@@ -435,31 +431,23 @@ with tab_profile:
                         'Цвет': res_color
                     })
                 
-                # Создаем DataFrame для отображения
                 display_df = pd.DataFrame(display_data)
                 
-                # Выводим метрики
+                # Метрики
                 col1, col2, col3 = st.columns(3)
-                col1.metric("Форма (В-Н-П)", f"{wins}-{draws}-{losses}", f"За последние {len(last_10)} матчей")
+                col1.metric("Форма (В-Н-П)", f"{wins}-{draws}-{losses}", f"За последние {len(last_10)}")
                 col2.metric("Ср. xG (За)", f"{total_xg_for / len(last_10):.2f}", f"Ср. Удары: {total_shots_for / len(last_10):.1f}")
                 col3.metric("Ср. xG (Пр)", f"{total_xg_against / len(last_10):.2f}", f"Ср. Удары: {total_shots_against / len(last_10):.1f}")
                 
                 st.write("---")
                 st.subheader("Последние матчи")
                 
-                # Функция для подсветки результата в таблице
-                def color_res(val):
-                    return f'color: {val}; font-weight: bold'
-                
+                # Применяем стилизацию к таблице
                 styled_df = display_df[['Соперник', 'Счет', 'Рез', 'xG (За)', 'xG (Пр)', 'Удары (За)', 'Удары (Пр)', 'В створ (За)', 'В створ (Пр)']].copy()
-                # Применяем цвет к колонке "Рез" через стили
-                styled_df = styled_df.style.applymap(lambda x: f'color: white', subset=['Соперник', 'Счет', 'xG (За)', 'xG (Пр)', 'Удары (За)', 'Удары (Пр)', 'В створ (За)', 'В створ (Пр)'])
-                
-                # Ручная подсветка для колонки "Рез" (поскольку applymap не работает с двумя колонками напрямую в Streamlit иногда)
                 def highlight_res_col(s):
                     return [f'color: {display_df.iloc[i]["Цвет"]}; font-weight: bold' for i in range(len(s))]
                 
-                styled_df = styled_df.apply(highlight_res_col, subset=['Рез'])
+                styled_df = styled_df.style.apply(highlight_res_col, subset=['Рез'])
                 
                 st.dataframe(styled_df, use_container_width=True, height=400)
 
