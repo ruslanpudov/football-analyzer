@@ -209,6 +209,7 @@ if not GITHUB_TOKEN:
 tab1, tab_profile, tab2 = st.tabs(["Анализ матча", "Профиль команды", "Мой Банк"])
 
 # ==========================================
+# ==========================================
 # ВКЛАДКА 1: АНАЛИЗ МАТЧА
 # ==========================================
 with tab1:
@@ -253,6 +254,7 @@ with tab1:
             score_df = league_df[(league_df['HTHG'] == ht_home) & (league_df['HTAG'] == ht_away)].copy()
             
             if score_df.empty:
+                st.session_state['analysis_done'] = False
                 st.warning(f"Нет матчей со счетом {ht_home}:{ht_away}")
             else:
                 scenario_name, filtered_df = "", pd.DataFrame()
@@ -305,8 +307,6 @@ with tab1:
                 sample_size = len(filtered_df)
                 reliability = "🟢 НАДЕЖНО" if sample_size >= 50 else ("🟡 СРЕДНЕ" if sample_size >= 20 else "🔴 НЕНАДЕЖНО")
                 
-                st.info(f"**Сценарий:** {scenario_name}\n\n**Выборка:** {sample_size} матчей {reliability}")
-                
                 tg = filtered_df['TotalGoals']
                 probs = {
                     "ТМ 1.5": (tg < 1.5).mean()*100, "ТБ 1.5": (tg > 1.5).mean()*100,
@@ -326,48 +326,74 @@ with tab1:
                 elif ht_goals == 2: markets = ["ТМ 2.5", "ТБ 2.5", "П1 (Хозяева)", "Х (Ничья)", "П2 (Гости)"]
                 else: markets = ["ТМ 3.5", "ТБ 3.5", "П1 (Хозяева)", "Х (Ничья)", "П2 (Гости)"]
                 
-                st.write("---")
+                # СОХРАНЯЕМ РЕЗУЛЬТАТЫ В ПАМЯТЬ
+                st.session_state['analysis_done'] = True
+                st.session_state['scenario_name'] = scenario_name
+                st.session_state['sample_size'] = sample_size
+                st.session_state['reliability'] = reliability
+                st.session_state['probs'] = probs
+                st.session_state['markets'] = markets
                 
-                # === ЗАГОЛОВКИ ТАБЛИЦЫ ===
-                h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 1])
-                h1.markdown("**Рынок**")
-                h2.markdown("**Вероятность**")
-                h3.markdown("**Твой Кф**")
-                h4.markdown("**Валуй**")
+                # Сбрасываем старые кэфы при новом анализе
+                for k in list(st.session_state.keys()):
+                    if k.startswith('odds_'):
+                        del st.session_state[k]
+
+    # ОТРИСОВКА РЕЗУЛЬТАТОВ (вынесено из кнопки, чтобы не пропадало)
+    if st.session_state.get('analysis_done', False):
+        scenario_name = st.session_state['scenario_name']
+        sample_size = st.session_state['sample_size']
+        reliability = st.session_state['reliability']
+        probs = st.session_state['probs']
+        markets = st.session_state['markets']
+        
+        st.info(f"**Сценарий:** {scenario_name}\n\n**Выборка:** {sample_size} матчей {reliability}")
+        st.write("---")
+        
+        # Заголовки таблицы
+        h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 1])
+        h1.markdown("**Рынок**")
+        h2.markdown("**Вероятность**")
+        h3.markdown("**Твой Кф**")
+        h4.markdown("**Валуй**")
+        
+        for m in markets:
+            with st.container():
+                c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 1], vertical_alignment="center")
                 
-                for m in markets:
-                    with st.container():
-                        c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 1])
+                # 1. Рынок
+                if probs[m] > 75 and probs[m] == max([probs[x] for x in markets]):
+                    c1.markdown(f"**{m}** 🔥 <span style='color:#FFF59D; font-size:12px;'>ТОП</span>", unsafe_allow_html=True)
+                else:
+                    c1.write(f"**{m}**")
+                    
+                # 2. Вероятность
+                c2.markdown(f"<span style='color:{get_prob_color(probs[m])}; font-size: 16px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
+                
+                # 3. Поле ввода кэфа
+                odds = c3.number_input("Кф", min_value=1.0, value=1.0, key=f"odds_{m}", label_visibility="collapsed", step=0.05)
+                
+                # 4. Расчет валуя
+                if odds > 1.0:
+                    roi = ((probs[m]/100) * odds - 1) * 100
+                    if roi > 0:
+                        c4.markdown(f"<span style='color:#00E676; font-weight: bold;'>+{roi:.1f}%</span>", unsafe_allow_html=True)
+                    else:
+                        c4.markdown(f"<span style='color:#E53935; font-weight: bold;'>{roi:.1f}%</span>", unsafe_allow_html=True)
                         
-                        # 1. Рынок
-                        if probs[m] > 75 and probs[m] == max([probs[x] for x in markets]):
-                            c1.markdown(f"**{m}** 🔥 <span style='color:#FFF59D; font-size:12px;'>ТОП</span>", unsafe_allow_html=True)
-                        else:
-                            c1.write(f"**{m}**")
-                            
-                        # 2. Вероятность
-                        c2.markdown(f"<span style='color:{get_prob_color(probs[m])}; font-size: 16px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
-                        
-                        # 3. Поле ввода кэфа
-                        odds = c3.number_input("Кф", min_value=1.0, value=st.session_state.get(f"odds_{m}", 1.0), key=f"odds_{m}", label_visibility="collapsed")
-                        
-                        # 4. Расчет валуя
-                        if odds > 1.0:
-                            roi = ((probs[m]/100) * odds - 1) * 100
-                            if roi > 0:
-                                c4.markdown(f"<span style='color:#00E676; font-weight: bold;'>+{roi:.1f}%</span>", unsafe_allow_html=True)
-                            else:
-                                c4.markdown(f"<span style='color:#E53935; font-weight: bold;'>{roi:.1f}%</span>", unsafe_allow_html=True)
-                                
-                            # 5. Кнопка добавления
-                            if c5.button("➕", key=f"add_{m}", help="Добавить в ожидаемые", use_container_width=True):
-                                df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
-                                new_row = {'Дата': datetime.now().strftime("%Y-%m-%d %H:%M"), 'Лига': league_name, 'Матч': match_name, 'Ставка': m, 'Кф': odds, 'Валуй': f"{roi:+.1f}%", 'Сумма': 100}
-                                df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
-                                if gh_write_csv(PENDING_FILE, df_pending):
-                                    st.toast(f"Ставка '{m}' сохранена!", icon="🎉")
-                                    st.balloons()
-                                    st.rerun()
+                    # 5. Кнопка добавления
+                    if c5.button("➕", key=f"add_{m}", help="Добавить в ожидаемые", use_container_width=True):
+                        df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
+                        new_row = {'Дата': datetime.now().strftime("%Y-%m-%d %H:%M"), 'Лига': league_name, 'Матч': match_name, 'Ставка': m, 'Кф': odds, 'Валуй': f"{roi:+.1f}%", 'Сумма': 100}
+                        df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
+                        if gh_write_csv(PENDING_FILE, df_pending):
+                            st.toast(f"Ставка '{m}' сохранена!", icon="🎉")
+                            st.balloons()
+                            st.rerun()
+                else:
+                    # Если кэф не введен (1.0), показываем прочерк и неактивную кнопку
+                    c4.markdown("<span style='color:gray;'>-</span>", unsafe_allow_html=True)
+                    c5.button("➕", key=f"add_{m}", disabled=True, use_container_width=True)
 
 # ==========================================
 # ВКЛАДКА 2: ПРОФИЛЬ КОМАНДЫ
