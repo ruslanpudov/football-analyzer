@@ -120,16 +120,6 @@ def get_prob_color(prob):
 
 # Стилизация таблицы истории
 def style_history(df_h):
-    def color_result(val):
-        if val == 'Выигрыш': return 'color: #00E676; font-weight: bold'
-        elif val == 'Проигрыш': return 'color: #E53935; font-weight: bold'
-        else: return 'color: #FFF59D; font-weight: bold'
-    def color_profit(val):
-        try:
-            num = float(str(val).replace(' ₽', '').replace('+', ''))
-            return 'color: #00E676; font-weight: bold' if num > 0 else 'color: #E53935; font-weight: bold'
-        except: return ''
-    
     # Считаем прибыль для каждой строки
     profits = []
     for _, r in df_h.iterrows():
@@ -141,6 +131,24 @@ def style_history(df_h):
     # Копируем датафрейм для отображения
     display_df = df_h[['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Сумма', 'Результат']].copy()
     display_df['Прибыль'] = profits
+
+    # Функция для подсветки результата
+    def highlight_result(s):
+        return ['color: #00E676; font-weight: bold' if v == 'Выигрыш' else ('color: #E53935; font-weight: bold' if v == 'Проигрыш' else 'color: #FFF59D; font-weight: bold') for v in s]
+        
+    # Функция для подсветки прибыли
+    def highlight_profit(s):
+        res = []
+        for v in s:
+            try:
+                num = float(str(v).replace(' ₽', '').replace('+', ''))
+                res.append('color: #00E676; font-weight: bold' if num > 0 else 'color: #E53935; font-weight: bold')
+            except:
+                res.append('')
+        return res
+
+    # Применяем стили
+    return display_df.style.apply(highlight_result, subset=['Результат']).apply(highlight_profit, subset=['Прибыль'])
     
     return display_df.style.applymap(color_result, subset=['Результат']).applymap(color_profit, subset=['Прибыль'])
 
