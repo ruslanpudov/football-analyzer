@@ -108,7 +108,7 @@ tab1, tab2 = st.tabs(["Анализ матча", "Мой Банк"])
 with tab1:
     with st.expander("Ввод данных за 1-й тайм", expanded=True):
         league_name = st.selectbox("Лига", list(league_map.keys()))
-        match_name = st.text_input("Название матча", "Реал - Барса")
+        match_name = st.text_input("Название матча")
         
         # ИСПОЛЬЗУЕМ ВКЛАДКИ ДЛЯ ХОЗЯЕВ И ГОСТЕЙ (Чтобы не листать вниз)
         tab_home, tab_away = st.tabs(["🏠 Хозяева", "✈️ Гости"])
