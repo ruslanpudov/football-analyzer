@@ -141,8 +141,9 @@ def gh_read_csv(path, columns):
     if not content.strip(): return pd.DataFrame(columns=columns)
     try:
         dfc = pd.read_csv(StringIO(content))
+        # КОНВЕРТИРУЕМ СУММУ В ЦЕЛЫЕ ЧИСЛА (убираем лишние нули)
+        dfc['Сумма'] = pd.to_numeric(dfc['Сумма'], errors='coerce').fillna(0).round(0).astype(int)
         dfc['Кф'] = pd.to_numeric(dfc['Кф'], errors='coerce').fillna(0)
-        dfc['Сумма'] = pd.to_numeric(dfc['Сумма'], errors='coerce').fillna(0)
         if 'Валуй' in dfc.columns: dfc['Валуй'] = dfc['Валуй'].astype(str).replace('nan', '-')
         if 'Лига' not in dfc.columns: dfc['Лига'] = 'Неизвестно'
         return dfc
@@ -193,7 +194,10 @@ def style_history(df_h):
             except: res.append('')
         return res
 
-    return display_df.style.apply(highlight_result, subset=['Результат']).apply(highlight_profit, subset=['Прибыль'])
+    return display_df.style.format({
+        'Кф': '{:.2f}',
+        'Сумма': '{:.0f}'
+    }).apply(highlight_result, subset=['Результат']).apply(highlight_profit, subset=['Прибыль'])
 
 # ==========================================
 # 4. ИНТЕРФЕЙС
@@ -203,7 +207,7 @@ st.title("⚽ Tactical Analyzer")
 if not GITHUB_TOKEN:
     st.warning("⚠️ GITHUB_TOKEN не найден.")
 
-# ТЕПЕРЬ 3 ВКЛАДКИ
+# 3 ВКЛАДКИ
 tab1, tab_profile, tab2 = st.tabs(["Анализ матча", "Профиль команды", "Мой Банк"])
 
 # ==========================================
@@ -361,7 +365,6 @@ with tab_profile:
     if df.empty:
         st.warning("База данных не загружена.")
     else:
-        # ФИКС ОШИБКИ: Убираем пустые значения (NaN) перед созданием списка
         home_teams = df['HomeTeam'].dropna().astype(str).unique()
         away_teams = df['AwayTeam'].dropna().astype(str).unique()
         all_teams = sorted(list(set(home_teams) | set(away_teams)))
@@ -374,7 +377,6 @@ with tab_profile:
             if team_matches.empty:
                 st.info("Нет данных по этой команде.")
             else:
-                # Берем последние 10 матчей (по порядку в базе, обычно она отсортирована по дате)
                 last_10 = team_matches.tail(10).copy()
                 
                 total_goals_for, total_goals_against = 0, 0
@@ -389,16 +391,15 @@ with tab_profile:
                     is_home = row['HomeTeam'] == selected_team
                     opp = row['AwayTeam'] if is_home else row['HomeTeam']
                     
-                    goals_for = row['FTHG'] if is_home else row['FTAG']
-                    goals_against = row['FTAG'] if is_home else row['FTHG']
+                    goals_for = int(row['FTHG']) if is_home else int(row['FTAG'])
+                    goals_against = int(row['FTAG']) if is_home else int(row['FTHG'])
                     xg_for = row['HxG'] if is_home else row['AxG']
                     xg_against = row['AxG'] if is_home else row['HxG']
-                    shots_for = row['HS'] if is_home else row['AS']
-                    shots_against = row['AS'] if is_home else row['HS']
-                    st_for = row['HST'] if is_home else row['AST']
-                    st_against = row['AST'] if is_home else row['HST']
+                    shots_for = int(row['HS']) if is_home else int(row['AS'])
+                    shots_against = int(row['AS']) if is_home else int(row['HS'])
+                    st_for = int(row['HST']) if is_home else int(row['AST'])
+                    st_against = int(row['AST']) if is_home else int(row['HST'])
                     
-                    # Защита от NaN в числовых полях
                     if pd.isna(xg_for): xg_for = 0
                     if pd.isna(xg_against): xg_against = 0
                     
@@ -422,8 +423,8 @@ with tab_profile:
                         'Соперник': opp,
                         'Счет': f"{goals_for} - {goals_against}",
                         'Рез': res_text,
-                        'xG (За)': round(xg_for, 2),
-                        'xG (Пр)': round(xg_against, 2),
+                        'xG (За)': float(f"{xg_for:.2f}"),
+                        'xG (Пр)': float(f"{xg_against:.2f}"),
                         'Удары (За)': shots_for,
                         'Удары (Пр)': shots_against,
                         'В створ (За)': st_for,
@@ -433,7 +434,6 @@ with tab_profile:
                 
                 display_df = pd.DataFrame(display_data)
                 
-                # Метрики
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Форма (В-Н-П)", f"{wins}-{draws}-{losses}", f"За последние {len(last_10)}")
                 col2.metric("Ср. xG (За)", f"{total_xg_for / len(last_10):.2f}", f"Ср. Удары: {total_shots_for / len(last_10):.1f}")
@@ -442,12 +442,18 @@ with tab_profile:
                 st.write("---")
                 st.subheader("Последние матчи")
                 
-                # Применяем стилизацию к таблице
                 styled_df = display_df[['Соперник', 'Счет', 'Рез', 'xG (За)', 'xG (Пр)', 'Удары (За)', 'Удары (Пр)', 'В створ (За)', 'В створ (Пр)']].copy()
                 def highlight_res_col(s):
                     return [f'color: {display_df.iloc[i]["Цвет"]}; font-weight: bold' for i in range(len(s))]
                 
-                styled_df = styled_df.style.apply(highlight_res_col, subset=['Рез'])
+                styled_df = styled_df.style.format({
+                    'xG (За)': '{:.2f}',
+                    'xG (Пр)': '{:.2f}',
+                    'Удары (За)': '{:.0f}',
+                    'Удары (Пр)': '{:.0f}',
+                    'В створ (За)': '{:.0f}',
+                    'В створ (Пр)': '{:.0f}'
+                }).apply(highlight_res_col, subset=['Рез'])
                 
                 st.dataframe(styled_df, use_container_width=True, height=400)
 
