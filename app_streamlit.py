@@ -90,6 +90,14 @@ def save_starting_bank(amount):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump({"starting_bank": amount}, f)
 
+# Функция для цвета вероятности
+def get_prob_color(prob):
+    if prob >= 80: return "#00E676" # Ярко-зеленый
+    elif prob >= 65: return "#81C784" # Салатовый
+    elif prob >= 50: return "#FFF59D" # Желтый
+    elif prob >= 35: return "#EF9A9A" # Светло-красный
+    else: return "#E53935" # Красный
+
 # ==========================================
 # 3. ИНТЕРФЕЙС
 # ==========================================
@@ -102,17 +110,17 @@ with tab1:
         league_name = st.selectbox("Лига", list(league_map.keys()))
         match_name = st.text_input("Название матча", "Реал - Барса")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("### Хозяева")
+        # ИСПОЛЬЗУЕМ ВКЛАДКИ ДЛЯ ХОЗЯЕВ И ГОСТЕЙ (Чтобы не листать вниз)
+        tab_home, tab_away = st.tabs(["🏠 Хозяева", "✈️ Гости"])
+        
+        with tab_home:
             ht_home = st.number_input("Голы", 0, 10, 0, key="ht_home")
             hst = st.number_input("Удары в створ", 0, 20, 0, key="hst")
             hts = st.number_input("Общие удары", 0, 40, 0, key="hts")
             hxg = st.number_input("xG", 0.0, 10.0, 0.0, 0.1, key="hxg")
             hc = st.number_input("Угловые", 0, 20, 0, key="hc")
             
-        with c2:
-            st.markdown("### Гости")
+        with tab_away:
             ht_away = st.number_input("Голы ", 0, 10, 0, key="ht_away")
             ast = st.number_input("Удары в створ ", 0, 20, 0, key="ast")
             ats = st.number_input("Общие удары ", 0, 40, 0, key="ats")
@@ -223,7 +231,10 @@ with tab1:
                     with st.container():
                         c1, c2, c3 = st.columns([2, 1, 1])
                         c1.write(f"**{m}**")
-                        c2.write(f"**{probs[m]:.1f}%**")
+                        
+                        # ЦВЕТНАЯ ПОДСВЕТКА ВЕРОЯТНОСТЕЙ
+                        prob_color = get_prob_color(probs[m])
+                        c2.markdown(f"<span style='color:{prob_color}; font-size: 18px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
                         
                         odds_val = st.session_state.get(f"odds_{m}", 1.0)
                         odds = c3.number_input("Кф", min_value=1.0, value=odds_val, key=f"odds_{m}", label_visibility="collapsed")
