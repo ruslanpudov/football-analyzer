@@ -11,11 +11,17 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Tactical Analyzer", page_icon="⚽", layout="centered")
 
 # ==========================================
-# КАСТОМНЫЙ CSS ДЛЯ КРАСОТЫ
+# КАСТОМНЫЙ CSS (Clean UI + Красота)
 # ==========================================
 st.markdown("""
     <style>
-    /* Плавное появление контента */
+    /* Скрываем стандартный интерфейс Streamlit (меню, футер, кнопку Deploy) */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display: none;}
+    
+    /* Плавное появление */
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
@@ -24,7 +30,7 @@ st.markdown("""
         animation: fadeIn 0.4s ease-out;
     }
     
-    /* Красивые карточки (контейнеры) */
+    /* Красивые карточки */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 12px !important;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
@@ -41,7 +47,7 @@ st.markdown("""
         transform: scale(0.96);
     }
     
-    /* Красивая главная кнопка (зеленая с черным текстом) */
+    /* Главная кнопка */
     button[kind="primary"] {
         color: black !important;
         background-color: #00E676 !important;
@@ -322,25 +328,32 @@ with tab1:
                 
                 st.write("---")
                 for m in markets:
-                    c1, c2, c3 = st.columns([2, 1, 1])
-                    c1.write(f"**{m}**")
-                    c2.markdown(f"<span style='color:{get_prob_color(probs[m])}; font-size: 18px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
-                    
-                    odds = c3.number_input("Кф", min_value=1.0, value=st.session_state.get(f"odds_{m}", 1.0), key=f"odds_{m}", label_visibility="collapsed")
-                    
-                    if odds > 1.0:
-                        roi = ((probs[m]/100) * odds - 1) * 100
-                        if roi > 0: st.success(f"Валуй: +{roi:.1f}%", icon="✅")
-                        else: st.error(f"Валуй: {roi:.1f}%", icon="❌")
+                    with st.container():
+                        c1, c2, c3 = st.columns([2, 1, 1])
                         
-                        if st.button(f"➕ Добавить: {m}", key=f"add_{m}", use_container_width=True):
-                            df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
-                            new_row = {'Дата': datetime.now().strftime("%Y-%m-%d %H:%M"), 'Лига': league_name, 'Матч': match_name, 'Ставка': m, 'Кф': odds, 'Валуй': f"{roi:+.1f}%", 'Сумма': 100}
-                            df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
-                            if gh_write_csv(PENDING_FILE, df_pending):
-                                st.toast(f"Ставка '{m}' сохранена!", icon="🎉")
-                                st.balloons() # АНИМАЦИЯ ШАРИКОВ
-                                st.rerun()
+                        # Подсветка лучшего рынка
+                        if probs[m] > 75 and probs[m] == max([probs[x] for x in markets]):
+                            c1.markdown(f"**{m}** 🔥 <span style='color:#FFF59D; font-size:12px;'>ТОП</span>", unsafe_allow_html=True)
+                        else:
+                            c1.write(f"**{m}**")
+                            
+                        c2.markdown(f"<span style='color:{get_prob_color(probs[m])}; font-size: 18px; font-weight: bold;'>{probs[m]:.1f}%</span>", unsafe_allow_html=True)
+                        
+                        odds = c3.number_input("Кф", min_value=1.0, value=st.session_state.get(f"odds_{m}", 1.0), key=f"odds_{m}", label_visibility="collapsed")
+                        
+                        if odds > 1.0:
+                            roi = ((probs[m]/100) * odds - 1) * 100
+                            if roi > 0: st.success(f"Валуй: +{roi:.1f}%", icon="✅")
+                            else: st.error(f"Валуй: {roi:.1f}%", icon="❌")
+                            
+                            if st.button(f"➕ Добавить: {m}", key=f"add_{m}", use_container_width=True):
+                                df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
+                                new_row = {'Дата': datetime.now().strftime("%Y-%m-%d %H:%M"), 'Лига': league_name, 'Матч': match_name, 'Ставка': m, 'Кф': odds, 'Валуй': f"{roi:+.1f}%", 'Сумма': 100}
+                                df_pending = pd.concat([df_pending, pd.DataFrame([new_row])], ignore_index=True)
+                                if gh_write_csv(PENDING_FILE, df_pending):
+                                    st.toast(f"Ставка '{m}' сохранена!", icon="🎉")
+                                    st.balloons()
+                                    st.rerun()
 
 with tab2:
     st.header("Мой Банк")
@@ -348,6 +361,37 @@ with tab2:
     df_bank = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
     df_pending = gh_read_csv(PENDING_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма'])
     starting_bank = get_starting_bank()
+    
+    # === АНАЛИТИКА (Как на ПК) ===
+    if len(df_bank) > 0:
+        df_bank['Лига'] = df_bank['Лига'].fillna('Не указана')
+        df_bank.loc[df_bank['Лига'] == 'Неизвестно', 'Лига'] = 'Не указана'
+        
+        league_stats = df_bank.groupby('Лига').apply(lambda x: pd.Series({
+            'Profit': sum((r['Сумма'] * r['Кф']) - r['Сумма'] if r['Результат'] == 'Выигрыш' else (-r['Сумма'] if r['Результат'] == 'Проигрыш' else 0) for _, r in x.iterrows()),
+            'Staked': x['Сумма'].sum(),
+        }), include_groups=False)
+        league_stats = league_stats[league_stats['Staked'] > 0]
+        if not league_stats.empty:
+            league_stats['ROI'] = (league_stats['Profit'] / league_stats['Staked'] * 100).round(1)
+            league_stats = league_stats.sort_values('ROI', ascending=False)
+            league_str = " | ".join([f"{idx}: {row['ROI']:+.0f}%" for idx, row in league_stats.head(3).iterrows()])
+        else: league_str = "Нет данных"
+
+        market_stats = df_bank.groupby('Ставка').apply(lambda x: pd.Series({
+            'Profit': sum((r['Сумма'] * r['Кф']) - r['Сумма'] if r['Результат'] == 'Выигрыш' else (-r['Сумма'] if r['Результат'] == 'Проигрыш' else 0) for _, r in x.iterrows()),
+            'Staked': x['Сумма'].sum(),
+        }), include_groups=False)
+        market_stats = market_stats[market_stats['Staked'] > 0]
+        if not market_stats.empty:
+            market_stats['ROI'] = (market_stats['Profit'] / market_stats['Staked'] * 100).round(1)
+            market_stats = market_stats.sort_values('ROI', ascending=False)
+            market_str = " | ".join([f"{idx}: {row['ROI']:+.0f}%" for idx, row in market_stats.head(3).iterrows()])
+        else: market_str = "Нет данных"
+        
+        with st.expander("📊 Аналитика по лигам и рынкам (ROI)"):
+            st.markdown(f"🏆 **Лучшие лиги:** {league_str}")
+            st.markdown(f"🎯 **Лучшие рынки:** {market_str}")
     
     with st.expander("⚙️ Настройки банка"):
         new_start = st.number_input("Начальный банк", value=starting_bank)
@@ -408,8 +452,8 @@ with tab2:
                     df_b = pd.concat([df_b, pd.DataFrame([new_row])], ignore_index=True)
                     df_p = df_pending.drop(i)
                     gh_write_csv(BANK_FILE, df_b); gh_write_csv(PENDING_FILE, df_p)
-                    st.toast("💰 Касса!", icon="🤑") # УВЕДОМЛЕНИЕ
-                    st.balloons() # ШАРИКИ
+                    st.toast("💰 Касса!", icon="🤑")
+                    st.balloons()
                     st.rerun()
                 if c2.button("❌", key=f"loss_{i}", help="Проигрыш", use_container_width=True):
                     df_b = gh_read_csv(BANK_FILE, ['Дата', 'Лига', 'Матч', 'Ставка', 'Кф', 'Валуй', 'Сумма', 'Результат'])
@@ -433,6 +477,11 @@ with tab2:
                     
     if not df_bank.empty:
         st.subheader("📜 История ставок")
+        
+        # Кнопка скачивания CSV
+        csv_data = df_bank.to_csv(index=False).encode('utf-8')
+        st.download_button(label="📥 Скачать историю (CSV)", data=csv_data, file_name="my_bets.csv", mime="text/csv")
+        
         st.dataframe(style_history(df_bank), use_container_width=True, height=300)
         
         with st.expander("⚙️ Управление историей"):
