@@ -313,15 +313,16 @@ with tab2:
         roi = (profit / total_staked * 100) if total_staked > 0 else 0
         
         # Красивые метрики с дельтой
-        last_profit = 0
-        if len(df_bank) > 0:
-            last_row = df_bank.iloc[-1]
-            if last_row['Результат'] == 'Выигрыш': last_profit = (last_row['Сумма'] * last_row['Кф']) - last_row['Сумма']
-            elif last_row['Результат'] == 'Проигрыш': last_profit = -last_row['Сумма']
-        
+                # Красивые метрики (общая прибыль и цветной ROI)
         col1, col2 = st.columns(2)
-        col1.metric("Текущий банк", f"{current_bank:,.0f} ₽", f"{last_profit:+.0f} ₽")
-        col2.metric("ROI", f"{roi:+.1f}%")
+        
+        # Для банка используем встроенную метрику (дельта = общая прибыль)
+        col1.metric("Текущий банк", f"{current_bank:,.0f} ₽", f"{profit:+.0f} ₽")
+        
+        # Для ROI делаем кастомный HTML, чтобы покрасить сам процент
+        roi_color = "#00E676" if roi >= 0 else "#E53935"
+        col2.markdown(f"<p style='font-size: 14px; color: #AAAAAA; margin-bottom: -5px;'>ROI</p>", unsafe_allow_html=True)
+        col2.markdown(f"<p style='font-size: 36px; font-weight: bold; margin-top: 0px; color: {roi_color};'>{roi:+.1f}%</p>", unsafe_allow_html=True)
         
         st.write(f"Ставок: **{total_bets}** | Выигрышей: **{wins}** | Проигрышей: **{losses}**")
         st.progress(min(win_rate / 100.0, 1.0), text=f"Винрейт: {win_rate:.1f}%")
